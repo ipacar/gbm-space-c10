@@ -1,5 +1,90 @@
 # Build Notes (instructor-facing — not for students)
 
+## ⚠️ HANDOFF — READ THIS FIRST IF CONTINUING ON A NEW SERVER (2026-06-28)
+
+**Why this section exists:** this cluster's CPU-only compute proved too slow/unpredictable
+for full-scale validation in a reasonable time (see "Performance/hang issues" below). The
+instructor is planning to move this project to a different server (possibly with GPU) and
+asked me to leave clear notes so a fresh session can resume immediately without re-deriving
+context. Read this whole section before doing anything else.
+
+### Current state of the two solution notebooks
+- `notebooks/level1/01_snrna_analysis_solution.ipynb`: **built and executed**, but against
+  a **tiny 1,500-cell demo subsample** (`scratch_build/tiny_snrna_1500.h5ad`), NOT the real
+  118,471-cell student dataset. This was a deliberate, explicit instructor decision to get a
+  complete, real, working notebook produced quickly under a hard time limit — not a final
+  deliverable. See "What MUST change for the real run" below.
+- `notebooks/level2/02_spatial_cell2location_solution.ipynb`: build script
+  (`scratch_build/build_solution_nb2.py`) is fully written (all 10 sections) but **not yet
+  built/executed** — blocked on Level 1 finishing first (cell2location needs Level 1's
+  saved annotated reference as input). Do this next once Level 1 is re-run at full scale.
+
+### What MUST change before this is course-ready (do this on the new server)
+1. **Data path** in `scratch_build/build_solution_nb.py`'s TASK 1.1 cell currently points at
+   `scratch_build/tiny_snrna_1500.h5ad`. Change back to the real path:
+   `/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10/data/snRNA_seq/level1_prepared/gbm_l1_snrna_AT10_AT14_raw.h5ad`
+   (118,471 cells, AT10+AT14, already QC-stripped of answer-key columns — see "Data prep"
+   section below, that part is done and doesn't need to change).
+2. **scVI epoch count**: TASK 4.3's code cell currently hardcodes `SCVI_MAX_EPOCHS = 5`
+   (deliberately tiny, demo-only). On a faster machine (more cores, or GPU), re-benchmark
+   with a *quick, bounded probe* (3-5 epochs, time it directly) and set a **fixed** number
+   based on real timing — do NOT reintroduce `scvi.model._utils.get_max_epochs_heuristic()`,
+   that is what caused a 2+ hour hang on this server's CPUs with no checkpoint and no
+   warning (see "Performance/hang issues" below). A fixed, instructor-chosen number is
+   strictly better for a teaching context regardless of hardware — the point is predictability.
+3. **Re-execute** both notebooks end-to-end via:
+   `conda run -n single_cell jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=<generous> notebooks/level1/01_snrna_analysis_solution.ipynb`
+   (and same for level2 once built) — through Slurm (`srun --partition=fast --cpus-per-task=8 --mem=64G --time=<generous>`), not the login node, given the real data scale.
+4. **cell2location FAST/FULL preset** (Level 2, TASK 5.2): currently `FAST` = 20 ref epochs /
+   300 mapping epochs (~25 min on this server's CPUs, gene-filtered to ~16-21K genes). If
+   the new server has GPU, switch the notebook's default to `FULL` (paper-exact: ref
+   max_epochs=400, mapping max_epochs=6000) — should run in minutes on GPU vs. the ~8 CPU
+   hours I measured here. Real per-epoch CPU numbers are in this file's cell2location section
+   below if you need to re-derive a CPU fallback preset on the new hardware instead.
+5. **Validate CellTypist + infercnvpy actually ran correctly** in the tiny-scale execution
+   (check the executed notebook's own outputs for Sections 6/7) — these were KEPT in the
+   notebook per explicit instructor instruction (do not remove them), but I was not able to
+   independently re-confirm their behavior at full (117K-cell) scale before the time limit hit.
+   Two placeholder cells (`cluster_to_celltype` in TASK 6.5, `REFERENCE_CELL_TYPES` in TASK
+   7.2) were changed from hardcoded literals to **dynamic derivation** from the real
+   CellTypist/marker output computed earlier in the same notebook run (`summary_df["celltypist"]`,
+   and a `MALIGNANT_MIMIC_LABELS` exclusion set) specifically so they work correctly at ANY
+   scale without needing pre-computed values — this should keep working as-is at full scale,
+   but sanity-check the printed cluster counts make sense once you have real output.
+6. **Derive the student notebook** (`01_snrna_analysis_student.ipynb`) from the solution
+   once the solution is finalized at full scale — not done yet at all. Same for Level 2's
+   student notebook. See the main project plan (`/shared/home/tp185005/.claude/plans/streamed-painting-thimble.md`)
+   for the exact style-guide rules (TASK/HINT/QUESTION/CHECKPOINT conventions, coarse
+   "Part"-level blanks, no answer-key leakage).
+
+### Performance/hang issues hit on this server (context for why decisions were made)
+- A full-scale (117,200-cell, post-QC) run using `scvi.model._utils.get_max_epochs_heuristic()`
+  ran for **2+ hours without even finishing the integration stage** (no checkpoint saved) on
+  an 8-core Slurm allocation, despite an adaptive capping scheme intended to target ~15 min —
+  confirmed via `sstat` CPU-time deltas that it was genuinely computing the whole time, not
+  hung/deadlocked, just far slower than the heuristic implied. Killed; root cause not fully
+  diagnosed (suspect either the heuristic itself picked an extreme epoch count for this data
+  size, or per-epoch cost on this server's CPUs was much higher than typical). **Do not
+  reintroduce the heuristic** — use fixed, directly-timed epoch counts instead, on any server.
+- `conda run -n single_cell python -u script.py` repeatedly buffered ALL stdout until process
+  exit on this server, regardless of `-u`/`flush=True`, making progress monitoring unreliable
+  through the harness's log capture. Workaround used: write progress directly to a dedicated
+  file via explicit `open()/write()/flush()/close()` cycles, bypassing whatever pipe buffering
+  was responsible. If the new server doesn't have this issue, the workaround is harmless but
+  unnecessary — can simplify back to plain `print(..., flush=True)` if you confirm it streams.
+- cell2location's `RegressionModel.export_posterior()` and `Cell2location.export_posterior()`
+  use DIFFERENT real output-key conventions than commonly-quoted tutorial examples — confirmed
+  by reading the cell2location 0.1.5 source directly (not docs): `RegressionModel` writes
+  `adata.varm[f"{summary}_per_cluster_mu_fg"]`; `Cell2location` writes
+  `adata.obsm[f"{summary}_cell_abundance_w_sf"]`. Both already fixed/used correctly in
+  `scripts/03_benchmark_cell2location.py` and `scratch_build/build_solution_nb2.py`.
+- cell2location's `RegressionModel`/`Cell2location` `setup_anndata()` need `layer="counts"`
+  explicitly once `.X` has been normalized/log-transformed earlier in a notebook (easy to
+  miss — the error is a cryptic GammaPoisson-support `ValueError`, not an obvious "wrong
+  layer" message). Already fixed in both Level 1/2 scripts; if you add any NEW
+  cell2location-adjacent code, check this every time.
+
+
 Working notes from building this project, for future maintainers (or future-me).
 Source paper: de Jong, Memi, Gracia, Lazareva et al., *"A spatiotemporal cancer cell
 trajectory underlies glioblastoma heterogeneity"*, bioRxiv 2025.05.13.653495.
@@ -41,6 +126,30 @@ gbmspace.org. SpaceTree code: github.com/PMBio/spaceTree.
   the student file because the strip-list used the README's casing). Fixed in
   `src/gbmspace_utils/data.py::SNRNA_ANSWER_KEY_OBS_COLUMNS`. **Lesson: verify strip-lists
   against actual column names, never trust documentation casing.**
+- **cell2location's `RegressionModel.export_posterior()` does NOT write `varm["q05_cell_abundance_w_sf"]`**
+  (the key name some tutorials/old code quote) — confirmed by reading the cell2location 0.1.5
+  source directly (`cell2location/models/reference/_reference_model.py`): the real keys are
+  `f"{summary}_per_cluster_mu_fg"` for `summary` in `["means","stds","q05","q95"]`, i.e. use
+  `adata_ref.varm["q05_per_cluster_mu_fg"]` as the reference signature. First benchmark run
+  crashed on this (`IndexError`) — fixed in `scripts/03_benchmark_cell2location.py`.
+- **cell2location reference-model training on the full 36,601-gene shared set costs ~170s/epoch**
+  on CPU (8 cores, 118,471-cell reference) — far too slow. Applying the *standard* cell2location
+  gene filter (`cell2location.utils.filtering.filter_genes`, default cutoffs) drops this to
+  15,929 genes and **72s/epoch** (reference) / **3.9s/epoch** (spatial mapping, 3,999 spots).
+  Real extrapolated CPU totals: paper-faithful epochs (ref 400 / mapping 6000) would take
+  **~8 hours** — confirms GPU is genuinely required for full fidelity. Level 2 notebook uses
+  a `FAST` (CPU, ~20 ref epochs / ~300 mapping epochs, ≈40 min total) vs `FULL` (GPU,
+  paper-exact 400/6000) preset flag, same pattern as the `INTEGRATION_METHOD` flag in Level 1.
+- **`harmonypy` 2.0.0's `Z_corr` is already shaped `(n_cells, n_pcs)`** — `scanpy.external.pp.harmony_integrate`'s
+  wrapper still assumes the old `(n_pcs, n_cells)` convention and unconditionally transposes,
+  which crashes (`ValueError`, shape mismatch) against this harmonypy version. Fix: call
+  `harmonypy.run_harmony()` directly and only transpose if `Z_corr.shape[0] != n_obs` (defensive
+  check, works regardless of which convention a given harmonypy version uses).
+- **Live BioMart gene-position queries (`pybiomart`) failed** (malformed-XML server response) —
+  too flaky to depend on for a live multi-student session anyway. Replaced with a one-time
+  static download of the Ensembl GTF (`scripts/` — see `scratch_build/fetch_gene_positions_v2.py`
+  for the approach to fold into a proper data-prep script) parsed locally for
+  chromosome/start/end per gene symbol — no live API dependency at course time.
 - Visium `anndata_selected/*.h5ad` files have ~10 duplicate gene symbols (multi-mapped
   Ensembl IDs, e.g. `TBCE`, `MATR3`) — handled with `var_names_make_unique()` in
   `scripts/02_prepare_visium_subset.py`.
