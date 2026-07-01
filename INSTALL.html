@@ -29,7 +29,7 @@ img { max-width: 100%; }
 <p>Once you can log in to the cluster (§1), get the materials with <strong>git</strong> and run the setup
 script (on the <strong>login node</strong>):
 <code>bash
-git clone git@github.com:&lt;OWNER&gt;/&lt;REPO&gt;.git ~/gbm-space-c10   # ← your instructor gives this URL
+git clone git@github.com:arl94/gbm-space-c10.git ~/gbm-space-c10   # ← your instructor gives this URL
 cd ~/gbm-space-c10
 bash setup.sh</code>
 <code>setup.sh</code> enables conda, verifies the <code>single_cell</code> environment, and registers the Jupyter
@@ -91,7 +91,7 @@ jobs — <strong>not</strong> for heavy computation (see §5).</p>
 <h2 id="1b-get-the-materials-with-git">1b. Get the materials with git</h2>
 <p>The project lives in a GitHub repository your instructor will share with you. On the <strong>login
 node</strong>, clone it into your home directory:</p>
-<pre><code class="language-bash">git clone git@github.com:&lt;OWNER&gt;/&lt;REPO&gt;.git ~/gbm-space-c10
+<pre><code class="language-bash">git clone git@github.com:arl94/gbm-space-c10.git ~/gbm-space-c10
 cd ~/gbm-space-c10
 </code></pre>
 <ul>
@@ -99,7 +99,7 @@ cd ~/gbm-space-c10
   private repo you must authenticate to GitHub, either with an <strong>SSH key</strong> (generate one on the
   cluster with <code>ssh-keygen -t ed25519</code>, then add <code>~/.ssh/id_ed25519.pub</code> to GitHub → Settings →
   SSH keys, and use the <code>git@github.com:…</code> URL) or a <strong>personal access token</strong> over HTTPS
-  (<code>https://github.com/&lt;OWNER&gt;/&lt;REPO&gt;.git</code>).</li>
+  (<code>https://github.com/arl94/gbm-space-c10.git</code>).</li>
 <li><strong>Updates:</strong> get the latest materials anytime with <code>git -C ~/gbm-space-c10 pull</code>.</li>
 <li><strong>Keep your work separate:</strong> do your analysis in <em>copies</em> (e.g. <code>cp
   notebooks/level1/01_snrna_analysis_student.ipynb notebooks/level1/01_myname.ipynb</code>) so a

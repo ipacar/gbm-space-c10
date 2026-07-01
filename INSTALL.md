@@ -4,7 +4,7 @@
 > Once you can log in to the cluster (§1), get the materials with **git** and run the setup
 > script (on the **login node**):
 > ```bash
-> git clone git@github.com:<OWNER>/<REPO>.git ~/gbm-space-c10   # ← your instructor gives this URL
+> git clone git@github.com:arl94/gbm-space-c10.git ~/gbm-space-c10   # ← your instructor gives this URL
 > cd ~/gbm-space-c10
 > bash setup.sh
 > ```
@@ -54,14 +54,14 @@ jobs — **not** for heavy computation (see §5).
 The project lives in a GitHub repository your instructor will share with you. On the **login
 node**, clone it into your home directory:
 ```bash
-git clone git@github.com:<OWNER>/<REPO>.git ~/gbm-space-c10
+git clone git@github.com:arl94/gbm-space-c10.git ~/gbm-space-c10
 cd ~/gbm-space-c10
 ```
 - **Access:** the repo may be private — your instructor adds you as a collaborator. To clone a
   private repo you must authenticate to GitHub, either with an **SSH key** (generate one on the
   cluster with `ssh-keygen -t ed25519`, then add `~/.ssh/id_ed25519.pub` to GitHub → Settings →
   SSH keys, and use the `git@github.com:…` URL) or a **personal access token** over HTTPS
-  (`https://github.com/<OWNER>/<REPO>.git`).
+  (`https://github.com/arl94/gbm-space-c10.git`).
 - **Updates:** get the latest materials anytime with `git -C ~/gbm-space-c10 pull`.
 - **Keep your work separate:** do your analysis in *copies* (e.g. `cp
   notebooks/level1/01_snrna_analysis_student.ipynb notebooks/level1/01_myname.ipynb`) so a
