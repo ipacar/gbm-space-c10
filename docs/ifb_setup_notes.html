@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ifb_setup_notes</title><style>
+:root { color-scheme: light dark; }
+body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+       line-height: 1.55; max-width: 900px; margin: 2rem auto; padding: 0 1.2rem;
+       color: #1f2328; background: #ffffff; }
+@media (prefers-color-scheme: dark) { body { color: #e6edf3; background: #0d1117; } }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.6em; }
+h1 { border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+code { background: rgba(175,184,193,.2); padding: .15em .35em; border-radius: 6px;
+       font-size: 85%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre { background: #f6f8fa; padding: 1rem; border-radius: 8px; overflow: auto; }
+@media (prefers-color-scheme: dark) { pre { background: #161b22; } }
+pre code { background: none; padding: 0; font-size: 90%; }
+blockquote { border-left: .3em solid #d0d7de; margin: .8em 0; padding: .2em 1em;
+             color: inherit; background: rgba(175,184,193,.12); border-radius: 0 6px 6px 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; display: block; overflow: auto; }
+th, td { border: 1px solid #d0d7de; padding: .5em .8em; }
+th { background: rgba(175,184,193,.2); }
+a { color: #0969da; } @media (prefers-color-scheme: dark){ a{ color:#58a6ff; } }
+img { max-width: 100%; }
+</style></head>
+<body><h1 id="ifb-core-setup-notes-session-4-2026-07-01">IFB Core setup notes — Session 4 (2026-07-01)</h1>
+<p>Context for whoever picks this up next. The project was developed on Curnagl (UNIL/CHUV),
+then transferred to the <strong>IFB Core cluster</strong> (Bordeaux course allocation) where the course
+actually runs. This file records what is true about the IFB environment and what was changed
+this session. Read this together with <code>CLAUDE.md</code> and <code>full_scale_run_plan.md</code>.</p>
+<h2 id="where-things-live-on-ifb">Where things live on IFB</h2>
+<ul>
+<li>Project root: <code>/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10</code></li>
+<li>Repo: <code>.../C10/lederer/gbm_space_proj</code></li>
+<li>Data: <code>.../C10/data/{snRNA_seq,visium,xenium,paper}</code>; answer keys <code>.../C10/lederer/answer_keys</code></li>
+<li>Student package: <strong><code>.../C10/starting_materials/</code></strong> (new this session — see below)</li>
+<li>Login host: <code>core.cluster.france-bioinformatique.fr</code> (fqdn seen: <code>core-login2…</code>)</li>
+<li>IFB user docs: https://ifb-elixirfr.gitlab.io/cluster/doc/</li>
+</ul>
+<h2 id="conda-on-ifb-important-gotcha">Conda on IFB (important gotcha)</h2>
+<ul>
+<li>conda + mamba live at <code>/shared/software/miniconda</code> (conda 25.11).</li>
+<li><code>module load conda</code> <strong>only adds conda to PATH</strong> — it does NOT enable <code>conda activate</code>
+  (fresh users get <em>"Run 'conda init' before 'conda activate'"</em>). The working recipe is:</li>
+<li><code>source /shared/software/miniconda/etc/profile.d/conda.sh</code> (per shell), <strong>or</strong></li>
+<li><code>/shared/software/miniconda/bin/conda init bash</code> once (persistent).</li>
+<li>The <code>single_cell</code> env is at <code>/shared/projects/tp_2630_ubordeaux_neuromics_184418/envs/single_cell</code>.
+  It is <strong>not</strong> on the default <code>envs_dirs</code>; either activate by full path or
+  <code>conda config --append envs_dirs /shared/projects/tp_2630_ubordeaux_neuromics_184418/envs</code>.</li>
+<li><strong>Permissions:</strong> the env dir carries an ACL granting <code>group:tp_2630_ubordeaux_neuromics_184418:rwx</code>
+  (verified propagated to deep files, incl. <code>bin/python</code>, <code>site-packages</code>), so all project-group
+  students can activate and import it. No per-student rebuild needed.</li>
+</ul>
+<h2 id="environment-reconciliation-done-this-session">Environment reconciliation done this session</h2>
+<ul>
+<li><code>single_cell</code> already had the full stack (scanpy 1.11.5, scvi-tools 1.4.2, cell2location 0.1.5,
+  celltypist 1.7.1, infercnvpy 0.6.1, squidpy 1.8.2, harmonypy 2.0.0, torch <strong>2.12.1+cu130</strong>,
+  decoupler, scikit-misc, leidenalg) but was <strong>missing <code>liana</code></strong>, which the Level 2 solution
+  imports. Installed <code>liana==1.7.3</code> (<code>pip install --no-user</code>) to match <code>docs/single_cell_environment.yml</code>.
+  All L1+L2 libraries now import cleanly.</li>
+</ul>
+<h2 id="paths-repointed-curnagl-ifb">Paths repointed (Curnagl → IFB)</h2>
+<ul>
+<li>The old Curnagl root <code>/work/PRTNR/CHUV/DIR/rgottar1/single_cell_all/users/alederer/C10</code> was
+  replaced with the IFB root in <strong>all code</strong>: the 4 notebooks, <code>scripts/*.py</code>, the level3
+  notebooks, and 15 <code>scratch_build/*.py|*.sh</code> builder/derive/probe scripts. Docs/markdown were
+  left as historical record. Backups of edited files are under the session scratch dir.</li>
+<li><strong>Do not</strong> re-run <code>build_solution_nb*.py</code> unless you intend to regenerate; the executed
+  notebooks are already repointed and finalized. If you regenerate, the builders are repointed too.</li>
+</ul>
+<h2 id="gpu-situation-on-ifb-as-of-2026-07-01">GPU situation on IFB (as of 2026-07-01)</h2>
+<ul>
+<li>The course account <code>tp_2630_ubordeaux_neuromics_184418</code> currently has associations for the
+  <strong><code>fast</code></strong> and <strong><code>long</code></strong> CPU partitions only. The <strong><code>gpu</code></strong> partition rejects jobs
+  ("Invalid account or account/partition combination"). GPU access is to be sorted out later.</li>
+<li>GPU-accelerated steps are exactly two: <strong>scVI</strong> integration (Level 1) and <strong>cell2location</strong>
+  (Level 2). Both have escape hatches:</li>
+<li>Level 1 also computes <strong>Harmony</strong> (CPU) and downstream already uses <code>INTEGRATION_METHOD="harmony"</code>.</li>
+<li>Level 2 cell2location results are <strong>checkpointed</strong> on disk:
+    <code>scratch_build/checkpoints/{vis_AT10_FULL.h5ad,vis_AT14_FULL.h5ad,inf_aver_FULL.parquet}</code>.</li>
+</ul>
+<h2 id="intended-student-workflow-confirmed-with-instructor">Intended student workflow (confirmed with instructor)</h2>
+<ul>
+<li><strong>CPU steps run on the FULL dataset.</strong> GPU steps: students do a <strong>proof-of-concept on a
+  subsample</strong>, then <strong>load the full-scale output</strong> (instructor is generating those on GPUs
+  separately). The student notebooks already point at the full input files.</li>
+<li>TODO (pending instructor input): a stable path for the instructor's GPU-generated full outputs
+  (L1 annotated <code>.h5ad</code> / scVI latent; L2 c2l result), and whether to add a small
+  "PoC-on-subsample → else load full output from <code>&lt;path&gt;</code>" scaffold into the notebooks.</li>
+</ul>
+<h2 id="running-jobs-on-ifb">Running jobs on IFB</h2>
+<ul>
+<li><strong>Always via Slurm</strong>, never the login node. Partition <code>fast</code> (≤24h), <code>long</code> (≤30d).</li>
+<li><strong>Slurm artifacts (script, --output, data) must be on the shared filesystem</strong>, not the
+  session <code>/tmp/...</code> scratch — <code>/tmp</code> is node-local, so a compute node can't see login-node
+  paths and the job fails immediately (learned the hard way: job 410780 failed for exactly this;
+  re-run from <code>scratch_build/ifb_smoke/</code> on shared FS worked).</li>
+<li>Working scratch for validation lives at <code>scratch_build/ifb_smoke/</code> (patch scripts + sbatch +
+  logs for the CPU validation runs).</li>
+</ul>
+<h2 id="validation-status-this-session">Validation status (this session)</h2>
+<ul>
+<li><strong>Level 1 subsample smoke</strong> (1,500 cells, scVI skipped, Harmony): job 409959 — <strong>PASSED</strong>,
+  44/44 code cells, 0 errors, inferCNV primary threshold fired.</li>
+<li><strong>Level 1 full-data CPU</strong> (118k cells, scVI skipped, Harmony), job 410287: heavy cells
+  (integration, inferCNV) passed with 0 errors; confirms students can run the full-data CPU
+  workload on <code>fast</code> (used 16 CPU / 200 GB). Outputs redirected to <code>ifb_smoke/processed</code> so the
+  real <code>data/processed/gbm_l1_snrna_AT10_AT14_annotated.h5ad</code> is untouched.</li>
+<li><strong>Level 2 CPU</strong> (full data, load c2l checkpoints): not yet run.</li>
+</ul>
+<h2 id="starting_materials-new-the-student-hand-out"><code>starting_materials/</code> (new — the student hand-out)</h2>
+<p><code>/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10/starting_materials/</code>
+- <code>setup_c10.sh</code> — one-shot: copies materials to <code>~/C10</code>, <code>conda init</code>, verifies env, registers kernel.
+- <code>README.md</code>/<code>.html</code>, <code>INSTALL.md</code>/<code>.html</code> (conda + VS Code Remote-SSH + Jupyter-on-compute-node
+  + Claude + Slurm). <strong>Markdown is always also rendered to <code>.html</code></strong> (instructor preference) via
+  <code>scratch_build/md2html.py</code>.
+- <code>notebooks/level{1,2}/*_student.ipynb</code> (leak-checked), <code>gbmspace_utils/</code>, <code>reference/grch38_gene_positions.parquet</code>,
+  <code>single_cell_environment.yml</code>.
+- Deliberately <strong>no <code>data/</code> copy or symlink</strong> (the big files stay shared read-only; <code>data/paper/</code>
+  holds the paper PDF which must not leak before the Level 2 reveal). Input paths are documented in README.</p></body></html>

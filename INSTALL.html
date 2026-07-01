@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INSTALL</title><style>
+:root { color-scheme: light dark; }
+body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+       line-height: 1.55; max-width: 900px; margin: 2rem auto; padding: 0 1.2rem;
+       color: #1f2328; background: #ffffff; }
+@media (prefers-color-scheme: dark) { body { color: #e6edf3; background: #0d1117; } }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.6em; }
+h1 { border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+code { background: rgba(175,184,193,.2); padding: .15em .35em; border-radius: 6px;
+       font-size: 85%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre { background: #f6f8fa; padding: 1rem; border-radius: 8px; overflow: auto; }
+@media (prefers-color-scheme: dark) { pre { background: #161b22; } }
+pre code { background: none; padding: 0; font-size: 90%; }
+blockquote { border-left: .3em solid #d0d7de; margin: .8em 0; padding: .2em 1em;
+             color: inherit; background: rgba(175,184,193,.12); border-radius: 0 6px 6px 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; display: block; overflow: auto; }
+th, td { border: 1px solid #d0d7de; padding: .5em .8em; }
+th { background: rgba(175,184,193,.2); }
+a { color: #0969da; } @media (prefers-color-scheme: dark){ a{ color:#58a6ff; } }
+img { max-width: 100%; }
+</style></head>
+<body><h1 id="setup-guide-c10-ifb-core-cluster">Setup guide — C10 (IFB Core cluster)</h1>
+<blockquote>
+<h2 id="fast-path">⚡ Fast path</h2>
+<p>Once you can log in to the cluster (§1), get the materials with <strong>git</strong> and run the setup
+script (on the <strong>login node</strong>):
+<code>bash
+git clone git@github.com:&lt;OWNER&gt;/&lt;REPO&gt;.git ~/gbm-space-c10   # ← your instructor gives this URL
+cd ~/gbm-space-c10
+bash setup.sh</code>
+<code>setup.sh</code> enables conda, verifies the <code>single_cell</code> environment, and registers the Jupyter
+kernel. Then open a <strong>new terminal</strong> and jump to §3 (VS Code). The sections below explain each
+step manually. <strong>Setup only — run heavy compute via Slurm (§5), not the login node.</strong></p>
+<p><strong>Getting updates later:</strong> <code>git -C ~/gbm-space-c10 pull</code>. Keep your own work in <em>separate</em>
+files (e.g. copy <code>01_..._student.ipynb</code> → <code>01_..._myname.ipynb</code>) so pulls don't clash.</p>
+</blockquote>
+<p>Everything for this project runs on the <strong>IFB Core cluster</strong>. You will:
+1. connect to the cluster,
+2. activate the shared conda environment,
+3. edit/run notebooks from <strong>VS Code</strong> with the <strong>Jupyter</strong> and <strong>Claude</strong> extensions,
+4. run any heavy computation through <strong>Slurm</strong> (never on the login node).</p>
+<p>Cluster facts you'll reuse:</p>
+<table>
+<thead>
+<tr>
+<th>Thing</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Login host</td>
+<td><code>core.cluster.france-bioinformatique.fr</code></td>
+</tr>
+<tr>
+<td>Your Slurm account</td>
+<td><code>tp_2630_ubordeaux_neuromics_184418</code></td>
+</tr>
+<tr>
+<td>Project folder</td>
+<td><code>/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10</code></td>
+</tr>
+<tr>
+<td>CPU partitions</td>
+<td><code>fast</code> (default, ≤ 24 h), <code>long</code> (≤ 30 d)</td>
+</tr>
+<tr>
+<td>GPU partition</td>
+<td><code>gpu</code> — <strong>not enabled for this course account yet</strong> (see note at the end)</td>
+</tr>
+<tr>
+<td>Conda env</td>
+<td><code>single_cell</code></td>
+</tr>
+</tbody>
+</table>
+<p>IFB user documentation: https://ifb-elixirfr.gitlab.io/cluster/doc/</p>
+<hr />
+<h2 id="1-connect-to-the-cluster">1. Connect to the cluster</h2>
+<p>You need an IFB account with access to the project (ask your instructor if you can't log in).</p>
+<p>From a terminal:</p>
+<pre><code class="language-bash">ssh &lt;your-ifb-username&gt;@core.cluster.france-bioinformatique.fr
+</code></pre>
+<p>You land on a <strong>login node</strong>. The login node is for editing, small commands, and submitting
+jobs — <strong>not</strong> for heavy computation (see §5).</p>
+<hr />
+<h2 id="1b-get-the-materials-with-git">1b. Get the materials with git</h2>
+<p>The project lives in a GitHub repository your instructor will share with you. On the <strong>login
+node</strong>, clone it into your home directory:</p>
+<pre><code class="language-bash">git clone git@github.com:&lt;OWNER&gt;/&lt;REPO&gt;.git ~/gbm-space-c10
+cd ~/gbm-space-c10
+</code></pre>
+<ul>
+<li><strong>Access:</strong> the repo may be private — your instructor adds you as a collaborator. To clone a
+  private repo you must authenticate to GitHub, either with an <strong>SSH key</strong> (generate one on the
+  cluster with <code>ssh-keygen -t ed25519</code>, then add <code>~/.ssh/id_ed25519.pub</code> to GitHub → Settings →
+  SSH keys, and use the <code>git@github.com:…</code> URL) or a <strong>personal access token</strong> over HTTPS
+  (<code>https://github.com/&lt;OWNER&gt;/&lt;REPO&gt;.git</code>).</li>
+<li><strong>Updates:</strong> get the latest materials anytime with <code>git -C ~/gbm-space-c10 pull</code>.</li>
+<li><strong>Keep your work separate:</strong> do your analysis in <em>copies</em> (e.g. <code>cp
+  notebooks/level1/01_snrna_analysis_student.ipynb notebooks/level1/01_myname.ipynb</code>) so a
+  <code>git pull</code> never conflicts with your edits. The big data files are <strong>not</strong> in the repo — they
+  stay on the shared filesystem (paths are given in the notebooks / <code>README.md</code>).</li>
+</ul>
+<hr />
+<h2 id="2-the-conda-environment">2. The conda environment</h2>
+<p>A ready-made environment called <strong><code>single_cell</code></strong> already exists on the cluster with the full
+stack (scanpy, anndata, scvi-tools, cell2location, celltypist, infercnvpy, squidpy, harmonypy,
+liana, decoupler, torch, jupyter…). You do <strong>not</strong> need to build it — just enable conda and make
+it discoverable.</p>
+<blockquote>
+<p>🚀 <strong>Shortcut:</strong> the setup script does all of §2 (and copies the materials) for you — see the
+box at the top of this file. The manual steps are below in case you want to understand them or
+the script fails.</p>
+</blockquote>
+<p><strong>Enable conda in your shell.</strong> <code>module load conda</code> only puts <code>conda</code> on your <code>PATH</code>; it does
+<strong>not</strong> enable <code>conda activate</code> (you'd get <em>"Run 'conda init' before 'conda activate'"</em>). Do this
+<strong>once</strong> so conda works in every future shell:</p>
+<pre><code class="language-bash">/shared/software/miniconda/bin/conda init bash
+conda config --set auto_activate_base false   # don't auto-enter 'base' on every login
+</code></pre>
+<p>Then <strong>open a new terminal</strong> (or <code>source ~/.bashrc</code>). From now on, <code>conda</code> is ready in any shell.</p>
+<blockquote>
+<p>One-off alternative (no <code>~/.bashrc</code> change): run
+<code>source /shared/software/miniconda/etc/profile.d/conda.sh</code> at the start of each session
+instead of <code>conda init</code>.</p>
+</blockquote>
+<p><strong>Point conda at the shared course environments</strong> (run once; edits your <code>~/.condarc</code>):</p>
+<pre><code class="language-bash">conda config --append envs_dirs /shared/projects/tp_2630_ubordeaux_neuromics_184418/envs
+</code></pre>
+<p><strong>Activate and check:</strong></p>
+<pre><code class="language-bash">conda activate single_cell
+python -c &quot;import scanpy, squidpy, cell2location, celltypist, infercnvpy, liana; print('env OK')&quot;
+</code></pre>
+<p>If <code>conda activate single_cell</code> can't find it, activate by full path instead:</p>
+<pre><code class="language-bash">conda activate /shared/projects/tp_2630_ubordeaux_neuromics_184418/envs/single_cell
+</code></pre>
+<h3 id="optional-build-your-own-copy">(Optional) Build your own copy</h3>
+<p>Only if you need your own environment, from this folder (after <code>conda init</code>, in a fresh shell):</p>
+<pre><code class="language-bash">mamba env create -n single_cell_mine -f single_cell_environment.yml
+conda activate single_cell_mine
+</code></pre>
+<blockquote>
+<p>On a shared cluster, if you ever <code>pip install</code> into a conda env, always use
+<code>pip install --no-user</code> (a plain <code>pip install</code> can write into <code>~/.local</code> and quietly break
+other environments).</p>
+</blockquote>
+<hr />
+<h2 id="3-vs-code-connecting-to-the-cluster">3. VS Code + connecting to the cluster</h2>
+<ol>
+<li>Install <strong>VS Code</strong> on your own laptop: https://code.visualstudio.com/</li>
+<li>In VS Code, open the Extensions panel (<code>Ctrl/Cmd+Shift+X</code>) and install <strong>"Remote - SSH"</strong>
+   (publisher: Microsoft).</li>
+<li>Press <code>F1</code> → <strong>"Remote-SSH: Connect to Host…"</strong> → <strong>"Add New SSH Host…"</strong> and enter:
+   <code>ssh &lt;your-ifb-username&gt;@core.cluster.france-bioinformatique.fr</code>
+   Then connect. VS Code now runs <em>on the cluster</em> — its terminal, file explorer, and
+   extensions all operate there.</li>
+<li><strong>File → Open Folder…</strong> and open your clone, <code>~/gbm-space-c10</code> (see the Fast-path box for the
+   <code>git clone</code> command, and §2 for git access if you haven't cloned yet).</li>
+</ol>
+<blockquote>
+<p>All the remaining extensions (Python, Jupyter, Claude) must be installed <strong>on the remote</strong>
+(VS Code shows an "Install in SSH: …" button once you're connected).</p>
+</blockquote>
+<hr />
+<h2 id="4-jupyter-notebooks-in-vs-code">4. Jupyter notebooks in VS Code</h2>
+<p>Install these extensions <strong>in the remote</strong> (VS Code shows an "Install in SSH: …" button):
+- <strong>Python</strong> (Microsoft)
+- <strong>Jupyter</strong> (Microsoft)</p>
+<p>Then open a notebook, click <strong>"Select Kernel"</strong> (top-right) → <strong>"Python Environments…"</strong> → pick
+<strong><code>single_cell</code></strong> (or the full-path env from §2), and run a cell to confirm it's alive. If
+<code>single_cell</code> doesn't appear, run <code>python -m ipykernel install --user --name single_cell</code> once
+in an activated shell, then reload VS Code.</p>
+<blockquote>
+<p>⚠️ <strong>Where does the kernel actually run?</strong> It runs on <strong>whatever machine VS Code is connected
+to</strong>. If you followed §3 you are connected to the <strong>login node</strong> — so the kernel runs there,
+with <em>no more memory or CPU than the shared login node</em>, and heavy cells will be slow and may
+be killed. This is fine <strong>only</strong> for light editing and tiny tests. <strong>To run the notebooks with
+real memory/compute, connect VS Code to a <em>compute node</em> — see §5.</strong></p>
+</blockquote>
+<hr />
+<h2 id="5-running-notebooks-with-real-memorycompute-use-slurm-never-the-login-node">5. Running notebooks with real memory/compute — use Slurm, never the login node</h2>
+<p>The login node is shared by everyone and is <strong>not</strong> for real compute. To give your notebook the
+memory and CPUs it needs, the kernel must run on a Slurm <strong>compute node</strong>. Pick one method:</p>
+<h3 id="method-a-recommended-connect-vs-code-directly-to-a-compute-node">Method A (recommended) — connect VS Code directly to a compute node</h3>
+<p>This gives the full VS Code notebook experience (integrated kernel, terminal, debugger) with the
+resources of a Slurm allocation.</p>
+<ol>
+<li><strong>On the login node</strong>, request an allocation and keep this terminal open:
+   <code>bash
+   salloc --account=tp_2630_ubordeaux_neuromics_184418 --partition=fast \
+          --cpus-per-task=8 --mem=64G --time=06:00:00
+   squeue -u $USER      # note the node you were given, e.g. cpu-node-42</code></li>
+<li><strong>On your laptop</strong>, add to <code>~/.ssh/config</code> (once):
+   ```
+   Host ifb
+       HostName core.cluster.france-bioinformatique.fr
+       User <your-ifb-username></li>
+</ol>
+<p>Host cpu-node-<em> gpu-node-</em>
+       User <your-ifb-username>
+       ProxyJump ifb
+   <code>``
+3. **In VS Code:**</code>F1<code>→ "Remote-SSH: Connect to Host…" → type the node name (</code>cpu-node-42<code>).
+   VS Code now runs *on the compute node*. Open the project folder, open the notebook, select the</code>single_cell<code>kernel (§4). The kernel now has your allocation's 8 CPUs / 64 GB.
+4. When finished, close the VS Code remote window and type</code>exit<code>in the</code>salloc` terminal to
+   release the node.</p>
+<blockquote>
+<p>The SSH-to-compute-node connection works <strong>only while your <code>salloc</code> allocation is alive</strong> (your
+session is attached to that job and bounded by its resources). If it ends, reconnect after a
+new <code>salloc</code>. If connecting to the node fails at your site, use Method B.</p>
+</blockquote>
+<p>Ask for the resources you actually need and a <strong>short</strong> <code>--time</code> (shorter jobs start sooner):
+bump <code>--mem</code> (e.g. <code>--mem=128G</code>) for the memory-heavy steps like inferCNV on the full dataset.</p>
+<h3 id="method-b-batch-execution-for-long-unattended-runs">Method B — batch execution for long, unattended runs</h3>
+<p>Best for running a whole notebook start-to-finish without babysitting it. Save as
+<code>run_notebook.sh</code> (edit the path), then <code>sbatch</code> it:</p>
+<pre><code class="language-bash">#!/bin/bash
+#SBATCH --account=tp_2630_ubordeaux_neuromics_184418
+#SBATCH --partition=fast
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --time=06:00:00
+#SBATCH --output=%x_%j.out
+#SBATCH --error=%x_%j.err
+
+module load conda
+conda activate single_cell
+jupyter nbconvert --to notebook --execute --inplace \
+  notebooks/level1/01_snrna_analysis_student.ipynb
+</code></pre>
+<pre><code class="language-bash">sbatch run_notebook.sh
+squeue -u $USER            # is it running?
+tail -f run_notebook_*.out # live output
+</code></pre>
+<h3 id="method-c-classic-jupyter-lab-in-the-browser-alternative">Method C — classic Jupyter Lab in the browser (alternative)</h3>
+<p>From inside an <code>salloc</code>/<code>srun</code> allocation on a compute node:</p>
+<pre><code class="language-bash">module load conda &amp;&amp; conda activate single_cell
+jupyter lab --no-browser --ip=0.0.0.0 --port=8888
+</code></pre>
+<p>then forward the port from your laptop and open the printed URL:</p>
+<pre><code class="language-bash">ssh -J &lt;user&gt;@core.cluster.france-bioinformatique.fr -L 8888:&lt;node&gt;:8888 &lt;user&gt;@&lt;node&gt;
+</code></pre>
+<hr />
+<h2 id="6-claude-in-vs-code-ai-coding-help">6. Claude in VS Code (AI coding help)</h2>
+<ol>
+<li>With VS Code connected to the cluster, install the <strong>Claude Code</strong> extension (publisher:
+   Anthropic) <strong>in the remote</strong>.</li>
+<li>Open the Claude panel from the sidebar and <strong>sign in</strong> when prompted (a browser window opens
+   for authentication).</li>
+<li>Ask Claude for help right next to your code — explaining a function, debugging an error,
+   drafting an analysis step.</li>
+</ol>
+<blockquote>
+<p>Use AI as a <strong>learning accelerator, not a replacement for understanding</strong>. If Claude
+suggests a function or parameter you don't recognize, pause and learn what it does before
+using it — that's the part that transfers to your own future projects.</p>
+</blockquote>
+<hr />
+<h2 id="note-on-gpus">Note on GPUs</h2>
+<p>Two steps in the project are much faster on a GPU: <strong>scVI</strong> integration (Level 1) and
+<strong>cell2location</strong> training (Level 2). The <code>gpu</code> partition is <strong>not currently enabled</strong> for this
+course account. Until it is, either use the <strong>Harmony</strong> integration path in Level 1 (CPU, built
+into the notebook) and the provided <strong>precomputed cell2location results</strong> for Level 2, or run
+the GPU steps on CPU with reduced settings for a smaller test. Your instructor will let you
+know when GPU access is available.</p>
+<hr />
+<h2 id="quick-reference">Quick reference</h2>
+<pre><code class="language-bash">ssh &lt;user&gt;@core.cluster.france-bioinformatique.fr        # connect
+module load conda &amp;&amp; conda activate single_cell          # environment
+srun --account=tp_2630_ubordeaux_neuromics_184418 \
+     --partition=fast --cpus-per-task=8 --mem=32G \
+     --time=04:00:00 --pty bash                          # interactive compute node
+sbatch run_notebook.sh                                   # batch job
+squeue -u $USER                                          # my jobs
+</code></pre></body></html>

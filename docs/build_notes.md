@@ -22,7 +22,7 @@ context. Read this whole section before doing anything else.
 ### What MUST change before this is course-ready (do this on the new server)
 1. **Data path** in `scratch_build/build_solution_nb.py`'s TASK 1.1 cell currently points at
    `scratch_build/tiny_snrna_1500.h5ad`. Change back to the real path:
-   `/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10/data/snRNA_seq/level1_prepared/gbm_l1_snrna_AT10_AT14_raw.h5ad`
+   `/work/PRTNR/CHUV/DIR/rgottar1/single_cell_all/users/alederer/C10/data/snRNA_seq/level1_prepared/gbm_l1_snrna_AT10_AT14_raw.h5ad`
    (118,471 cells, AT10+AT14, already QC-stripped of answer-key columns — see "Data prep"
    section below, that part is done and doesn't need to change).
 2. **scVI epoch count**: TASK 4.3's code cell currently hardcodes `SCVI_MAX_EPOCHS = 5`
@@ -89,6 +89,72 @@ Working notes from building this project, for future maintainers (or future-me).
 Source paper: de Jong, Memi, Gracia, Lazareva et al., *"A spatiotemporal cancer cell
 trajectory underlies glioblastoma heterogeneity"*, bioRxiv 2025.05.13.653495.
 gbmspace.org. SpaceTree code: github.com/PMBio/spaceTree.
+
+## Full-scale rerun findings (new GPU cluster, 2026-06-29)
+
+- **scVI epoch timing, real data**: GPU (Quadro RTX 8000) probe on the real 117,200-nucleus
+  x 33,923-gene data: **19.2s/epoch**. Picked `SCVI_MAX_EPOCHS = 100` (~32 min) — fixed,
+  directly timed, not the adaptive heuristic (same lesson as before, just on faster hardware).
+- **infercnvpy `window_size` was 100 in the demo build, but this doc's own "paper-faithful
+  parameters" said 250** — a real, undetected drift between documented intent and the actual
+  code (not caught at demo scale because the malignant/TME split's correctness barely matters
+  on a 1,500-cell toy run). Fixed to `window_size=250` to match.
+- **Bigger finding: `cnv.tl.cnv_score()`'s absolute-threshold design doesn't transfer to this
+  pipeline at full scale.** Even after the window_size fix, the malignant/TME split's fallback
+  still fired — `cnv_score` (infercnvpy's own convenience function, which computes a
+  **cluster-level** mean(|X_cnv|) over `cnv_leiden` clusters and broadcasts it to every cell in
+  the cluster) came out compressed into a narrow 0.005-0.02 band for *all* cells, reference and
+  candidate-malignant alike — nowhere near the literature's absolute `signal > 0.02` cutoff.
+  Diagnosed by recomputing the **genuinely per-cell** signal directly (`mean(|X_cnv|)` per
+  nucleus, bypassing `cnv_leiden` clustering entirely) from the already-saved `X_cnv` — this
+  showed real, usable separation (candidate-malignant cell types ~0.0097-0.0125 mean vs.
+  reference cell types ~0.0039-00074 mean — a real ~2-3x signal-to-reference ratio, just on an
+  absolute scale far below the literature's `0.02`). **Fix**: stopped using
+  `cnv.tl.cnv_score()`'s cluster-broadcast value and the literature's absolute signal cutoff
+  entirely; instead compute the per-cell signal directly and calibrate `SIGNAL_CUT` as the
+  **75th percentile of the known-diploid reference cells' own signal distribution** — i.e.
+  "elevated relative to your own negative control," not an externally borrowed absolute number.
+  `CORR_CUT = 0.30` was left unchanged (cnv_corr's distribution showed real, uncompressed
+  spread — not shown to have the same problem). This combination reproduced **~59% malignant**
+  on the real data, landing inside the paper's expected 55-65% range, vs. ~0.5% with the
+  original absolute-threshold code. General lesson for whoever touches this section next:
+  **absolute CNA-signal thresholds from the literature are pipeline/platform-specific and
+  should be re-validated against your own reference population, not trusted as portable
+  constants** — exactly the kind of "real methods need critical validation" moment this
+  project already teaches elsewhere (paper's own 3%/5% threshold inconsistency).
+- **cell2location at FULL scale produced spatially flat, uninformative output despite training
+  "succeeding" (no errors, ELBO dropped substantially, all 6000 epochs completed).** Caught by
+  actually looking at the abundance/niche maps (pure speckle, no spatial coherence) rather than
+  trusting a clean exit code. Root cause, confirmed two ways: (1) the `cell_type` reference label
+  (Section 6's CellTypist majority call) is a real, distinct category for TME cells, but for
+  malignant cells it's a region-mimic label (e.g. "Hypothalamus glioblast" vs "Striatum
+  glioblast") — the *same* malignant population matched to whichever normal-brain-region profile
+  CellTypist's `Developing_Human_Brain` model happened to land on, not a real biological split
+  (mean pairwise correlation between these labels' average expression profiles: 0.80, up to
+  0.96-0.98). cell2location had essentially no orthogonal signal to resolve between them. (2) Read
+  the paper's actual Methods directly (`data/paper/GBM-Space-Paper.pdf`) — confirmed they mapped
+  "malignant and TME **clusters**" (their own 4-class/9-subclass cell-state hierarchy), never
+  region-mimic labels, and used mapping-model `batch_size ≈ 25% of spots` (we'd used full-batch,
+  100%, reasoning it was "defensible" for a small section — wrong, didn't match the paper and
+  plausibly contributed to the flat result given `detection_alpha=200`'s strong regularization).
+  **Fix**: build a combined reference label — `malignant_state` (Section 8's 9 marker-defined axis
+  states, already computed, unused until now) for malignant cells, `cell_type` for TME cells —
+  and set `batch_size = 0.25 * n_spots` for the mapping model, matching the paper. One more wrinkle
+  found while building this: ~26k non-malignant nuclei carry a malignant-mimic `cell_type` label
+  (e.g. "Pons OPC", "Pons neural crest cells") simply because CellTypist's `Developing_Human_Brain`
+  model has no clean adult-oligodendrocyte category — their actual marker expression
+  (`MBP/PLP1/MOG/MOBP/ST18`, mean score ~120-155 vs. ~1-6 baseline) confirms they're real
+  oligodendrocytes. Relabelled those as `"Oligodendrocyte"` instead of dropping them (a real,
+  abundant TME population, not a category worth losing); only the genuinely small/ambiguous
+  remainder (~3,300 cells) gets dropped from the reference. **Validated cheaply before the real
+  ~5-6h FULL rerun**: reran just the reference+mapping steps at FAST settings (20/300 epochs,
+  ~12 min on GPU) via `scratch_build/validate_c2l_fix.py` — abundance-map coefficient of variation
+  jumped from ~3-8% (flat/broken) to ~20-36% (real spatial structure), confirmed visually as
+  coherent spatial regions, not speckle. General lesson: **validate a model's output is actually
+  informative, not just that training exits cleanly** — and when something doesn't transfer from
+  a paper, go read the paper's actual Methods text rather than trusting a prior transcription of
+  it, since the gap is often in a detail (reference label granularity, batch size) that's easy to
+  silently default away from.
 
 ## Donor / sample selection
 
@@ -202,7 +268,7 @@ gbmspace.org. SpaceTree code: github.com/PMBio/spaceTree.
 
 ## Environment
 
-`single_cell` conda env (`/shared/projects/tp_2630_ubordeaux_neuromics_184418/envs/single_cell`)
+`single_cell` conda env (`/work/PRTNR/CHUV/DIR/rgottar1/single_cell_all/users/alederer/anaconda3/envs/single_cell`)
 is shared across several course groups (informally the deployed version of the planned
 `neuromics-sc` env) and was mid-build when this project started — missing several packages
 from the official `cluster_setup/neuromics-sc.yml` wishlist. Added for this project specifically:

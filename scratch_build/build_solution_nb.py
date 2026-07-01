@@ -68,7 +68,7 @@ md(r"""## 1. Load and explore the data
 
 🔬 **TASK 1.1:** Load the snRNA-seq dataset and inspect the AnnData object — shape, `.obs` columns, and confirm what is stored in `.X`.""")
 
-code(r"""DATA = "/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10/lederer/gbm_space_proj/scratch_build/tiny_snrna_1500.h5ad"  # DEMO build: tiny subsample for rapid turnaround. Swap to the full level1_prepared path for the real course run.
+code(r"""DATA = "/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10/data/snRNA_seq/level1_prepared/gbm_l1_snrna_AT10_AT14_raw.h5ad"
 adata = sc.read_h5ad(DATA)
 print(adata)
 print(f"\nShape: {adata.n_obs:,} nuclei x {adata.n_vars:,} genes")
@@ -265,7 +265,8 @@ print(f"scVI reference set up on {scvi_ad.n_obs:,} cells")""")
 
 md(r"""💡 **HINT — runtime caveat.** scVI training cost scales with dataset size and is genuinely slow on CPU for tens of thousands of cells — avoid scvi-tools' automatic epoch heuristic (`get_max_epochs_heuristic`) for a teaching session; in this environment it picked an epoch count that made the full run take well over an hour with no early feedback, which is the wrong trade for a live class. Use a small, **fixed** epoch count instead — you always know your runtime budget up front. Raise it if you have time or GPU access.""")
 
-code(r"""SCVI_MAX_EPOCHS = 5   # fixed & small deliberately -- NOT an adaptive heuristic (see HINT above). Raise for a real run.
+code(r"""SCVI_MAX_EPOCHS = 100   # fixed & directly timed deliberately -- NOT an adaptive heuristic (see HINT above).
+# GPU probe on the real 117,200-cell x 33,923-gene data: 19.2s/epoch -> 100 epochs ~= 32 min.
 t0 = time.time()
 model = scvi.model.SCVI(scvi_ad, n_latent=30)
 model.train(max_epochs=SCVI_MAX_EPOCHS, early_stopping=False)
@@ -448,7 +449,7 @@ Glioma cells carry large-scale **copy-number alterations (CNAs)** — whole-arm 
 
 🔬 **TASK 7.1:** Attach gene chromosomal positions (GRCh38) to `.var` — infercnvpy needs `chromosome`, `start`, `end` to order genes along the genome.""")
 
-code(r"""gene_pos = pd.read_parquet("/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10/lederer/gbm_space_proj/scratch_build/grch38_gene_positions.parquet")
+code(r"""gene_pos = pd.read_parquet("/shared/projects/tp_2630_ubordeaux_neuromics_184418/projects/C10/lederer/gbm_space_proj/reference/grch38_gene_positions.parquet")
 adata.var["chromosome"] = adata.var_names.map(gene_pos["chromosome"])
 adata.var["start"] = adata.var_names.map(gene_pos["start"])
 adata.var["end"] = adata.var_names.map(gene_pos["end"])
@@ -475,12 +476,19 @@ print("Reference nuclei for CNV:", int((adata.obs['cnv_reference'] != 'other').s
 import infercnvpy as cnv
 cnv.tl.infercnv(adata, reference_key="cnv_reference",
                 reference_cat=[c for c in REFERENCE_CELL_TYPES],
-                window_size=100, step=10)
+                window_size=250, step=10)
 cnv.tl.pca(adata)
-cnv.pp.neighbors(adata)   # writes uns['cnv_neighbors'], required by tl.leiden below
-cnv.tl.leiden(adata)      # writes obs['cnv_leiden'], required by cnv_score below
-cnv.tl.cnv_score(adata)   # writes obs['cnv_score']
-print("infercnvpy done. cnv_score summary:")
+
+# infercnvpy's own cnv.tl.cnv_score() computes a CLUSTER-level score (mean|X_cnv| within
+# cnv_leiden clusters, then broadcasts that one number to every cell in the cluster) -- at
+# full scale this collapsed to a narrow, weakly-separated range (0.005-0.02) because the
+# cnv_leiden clustering doesn't cleanly separate high- and low-CNA cells. We use the
+# genuinely per-cell signal directly instead: mean(|X_cnv|) per nucleus, no cluster-broadcast.
+from scipy.sparse import issparse as _issparse
+_Xcnv = adata.obsm["X_cnv"]
+_Xcnv = _Xcnv.toarray() if _issparse(_Xcnv) else np.asarray(_Xcnv)
+adata.obs["cnv_score"] = np.abs(_Xcnv).mean(axis=1)
+print("infercnvpy done. Per-cell cnv_score summary:")
 print(adata.obs["cnv_score"].describe().round(4))""")
 
 md(r"""🔬 **TASK 7.3:** Build a per-nucleus **CNA correlation** = correlation of each nucleus's CNA profile to the mean profile of high-CNA nuclei (a malignant-consensus profile). Malignant cells score high on *both* CNA signal and CNA correlation.""")
@@ -504,9 +512,14 @@ md(r"""💡 **HINT — thresholds, and an honest caveat about the source.** A co
 
 ⚠️ Worth knowing for later: published CNA pipelines are not always internally consistent. The kind of methods text these thresholds come from will sometimes state one cluster-level cutoff (e.g. "≥ 3% malignant") while the *figure legend* of the same work states another (e.g. "≥ 5%"). We flag this not to be pedantic but because **real papers contain exactly these small inconsistencies** — part of learning to read them critically is noticing when the methods and the figures disagree, and deciding for yourself.
 
+⚠️ **A second, bigger caveat, found by actually running this at full scale**: the absolute signal cut `~0.02` turned out not to transfer to this exact pipeline/platform (snRNA-seq nuclei, this window/step, this normalization) at all — on the real 117,200-nucleus data, even genuinely diploid reference cells and the most CNA-elevated candidate-malignant clusters all sit within a narrow 0.005-0.02 band, so a literal `0.02` cut calls almost nothing malignant. This is exactly the kind of pipeline-to-pipeline absolute-threshold mismatch that's common with RNA-based CNA inference — the fix is to **calibrate the signal cut against your own reference population** instead of trusting an external absolute number: take a high percentile (here, the 75th) of the *known-diploid reference cells'* own signal distribution as "what counts as elevated here." The correlation cut (`> 0.3`) wasn't shown to have this problem, so it's kept as-is.
+
 🔬 **TASK 7.4:** Classify nuclei (cell-level) and clusters (cluster-level), and set a derived `cell_status`.""")
 
-code(r"""SIGNAL_CUT, CORR_CUT, CLUSTER_FRAC = 0.02, 0.30, 0.20
+code(r"""CORR_CUT, CLUSTER_FRAC = 0.30, 0.20
+ref_mask = (adata.obs["cnv_reference"] != "other").to_numpy()
+SIGNAL_CUT = np.quantile(adata.obs["cnv_score"].to_numpy()[ref_mask], 0.75)
+print(f"Reference-calibrated SIGNAL_CUT (75th pctile of known-diploid cells' own signal): {SIGNAL_CUT:.4f}")
 
 adata.obs["malignant_cell"] = (adata.obs["cnv_score"] > SIGNAL_CUT) & (adata.obs["cnv_corr"] > CORR_CUT)
 frac_mal = adata.obs.groupby("leiden")["malignant_cell"].mean()
@@ -535,7 +548,7 @@ sc.pl.umap(adata, color="cell_status_derived", ax=axes[2], show=False, title="Ma
            palette={"Malignant": "firebrick", "TME": "steelblue"})
 plt.tight_layout(); plt.show()""")
 
-md(r"""⚠️ **CHECKPOINT:** With two adult glioma donors you should land on a **malignant majority** — very roughly **55–65% of nuclei malignant**, the rest TME (dominated by oligodendrocytes and myeloid cells). If you got almost everything malignant or almost nothing, re-check (a) your reference clusters in 7.2 and (b) that gene positions attached in 7.1.""")
+md(r"""⚠️ **CHECKPOINT:** With two adult glioma donors you should land on a **malignant majority** — very roughly **55–65% of nuclei malignant**, the rest TME (dominated by oligodendrocytes and myeloid cells). If you got almost everything malignant or almost nothing, re-check (a) your reference clusters in 7.2, (b) that gene positions attached in 7.1, and (c) that `SIGNAL_CUT` is actually calibrated against your reference cells' own signal distribution (7.4) rather than a fixed absolute number — an absolute cut tends to silently fail across pipelines/platforms, exactly the failure mode this checkpoint is here to catch.""")
 
 # ============================================================ 8. MALIGNANT AXIS
 md(r"""## 8. The malignant cell-state axis

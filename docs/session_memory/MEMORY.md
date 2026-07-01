@@ -1,0 +1,4 @@
+- [GBM-Space C10 project](project_c10_gbm_space.md) — location, cross-cluster migration history, where the run plan lives
+- [HPC execution preferences](hpc_execution_preferences.md) — native conda not Singularity; short --time requests queue faster
+- [Usage-limit handling](feedback_usage_limit_handling.md) — schedule a wakeup to self-resume after a usage-limit reset during long tasks
+- [pip --no-user in conda envs](feedback_pip_no_user.md) — always use --no-user; ~/.local installs broke other envs on this cluster

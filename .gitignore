@@ -3,3 +3,10 @@ data/processed/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+# vendored third-party package (install via pip: BASIS==0.3.2); not course material
+BASIS/
+# Level 3 BASIS segmentation notebook — excluded for now (needs raw Xenium data)
+notebooks/level3/04_xenium_segmentation_basis_solution.ipynb
+# large data lives outside the repo on the shared filesystem
+*.h5ad
+

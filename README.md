@@ -31,7 +31,7 @@ module load conda   # if needed
 conda activate single_cell
 jupyter lab
 ```
-`single_cell` lives at `/shared/projects/tp_2630_ubordeaux_neuromics_184418/envs/single_cell`
+`single_cell` lives at `/work/PRTNR/CHUV/DIR/rgottar1/single_cell_all/users/alederer/anaconda3/envs/single_cell`
 — it's an instructor-owned environment shared across several course groups (the official
 planning name is `neuromics-sc`). It already ships scanpy, anndata, cell2location,
 scvi-tools, torch; squidpy, celltypist, harmonypy, and decoupler were added for this
