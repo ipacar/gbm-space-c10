@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cluster_quickstart</title><style>
+:root { color-scheme: light dark; }
+body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+       line-height: 1.55; max-width: 900px; margin: 2rem auto; padding: 0 1.2rem;
+       color: #1f2328; background: #ffffff; }
+@media (prefers-color-scheme: dark) { body { color: #e6edf3; background: #0d1117; } }
+h1, h2, h3 { line-height: 1.25; margin-top: 1.6em; }
+h1 { border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+h2 { border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+code { background: rgba(175,184,193,.2); padding: .15em .35em; border-radius: 6px;
+       font-size: 85%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre { background: #f6f8fa; padding: 1rem; border-radius: 8px; overflow: auto; }
+@media (prefers-color-scheme: dark) { pre { background: #161b22; } }
+pre code { background: none; padding: 0; font-size: 90%; }
+blockquote { border-left: .3em solid #d0d7de; margin: .8em 0; padding: .2em 1em;
+             color: inherit; background: rgba(175,184,193,.12); border-radius: 0 6px 6px 0; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; display: block; overflow: auto; }
+th, td { border: 1px solid #d0d7de; padding: .5em .8em; }
+th { background: rgba(175,184,193,.2); }
+a { color: #0969da; } @media (prefers-color-scheme: dark){ a{ color:#58a6ff; } }
+img { max-width: 100%; }
+</style></head>
+<body><h1 id="ifb-cluster-quickstart-vs-code-passwordless-login-conda-test">IFB cluster quickstart — VS Code, passwordless login, conda test</h1>
+<p>A short, project-agnostic setup for working on the <strong>IFB Core cluster</strong> from <strong>VS Code</strong>. Do this
+once; it applies to any course project. ~15 minutes.</p>
+<p>Cluster login host: <code>core.cluster.france-bioinformatique.fr</code> (you need an IFB account).</p>
+<hr />
+<h2 id="1-install-vs-code-extensions">1. Install VS Code + extensions</h2>
+<ol>
+<li>Install <strong>VS Code</strong> on your laptop: <a href="https://code.visualstudio.com/">https://code.visualstudio.com/</a></li>
+<li>Open the Extensions panel (<code>Ctrl/Cmd+Shift+X</code>) and install <strong>Remote - SSH</strong> (Microsoft).</li>
+<li>The <strong>Python</strong>, <strong>Jupyter</strong>, and (optional) <strong>Claude</strong> extensions are installed <em>later</em>, <strong>on
+   the cluster</strong>, once you're connected — VS Code shows an "Install in SSH: …" button for each.</li>
+</ol>
+<hr />
+<h2 id="2-passwordless-login-with-an-ssh-key">2. Passwordless login with an SSH key</h2>
+<p>Instead of typing your password every time, register your laptop with an SSH key.</p>
+<p><strong>a. Make a key</strong> (skip if <code>~/.ssh/id_ed25519</code> already exists). In a laptop terminal:</p>
+<pre><code class="language-bash">ssh-keygen -t ed25519          # press Enter through the prompts
+</code></pre>
+<p><strong>b. Copy the public key to the cluster</strong> (asks for your password one last time):</p>
+<pre><code class="language-bash"># macOS / Linux:
+ssh-copy-id &lt;your-username&gt;@core.cluster.france-bioinformatique.fr
+
+# Windows PowerShell (if ssh-copy-id is missing):
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh &lt;your-username&gt;@core.cluster.france-bioinformatique.fr &quot;mkdir -p ~/.ssh &amp;&amp; cat &gt;&gt; ~/.ssh/authorized_keys &amp;&amp; chmod 600 ~/.ssh/authorized_keys&quot;
+</code></pre>
+<p><strong>c. Tell your SSH config to use the key.</strong> Open <code>~/.ssh/config</code> (in VS Code: <code>F1</code> →
+"Remote-SSH: Open SSH Configuration File") and add:</p>
+<pre><code>Host ifb
+    HostName core.cluster.france-bioinformatique.fr
+    User &lt;your-username&gt;
+    IdentityFile ~/.ssh/id_ed25519
+</code></pre>
+<p><strong>d. Test — should log in with no password:</strong></p>
+<pre><code class="language-bash">ssh ifb
+</code></pre>
+<blockquote>
+<p>If it still asks for a password: on the cluster run <code>chmod 700 ~/.ssh &amp;&amp; chmod 600 ~/.ssh/authorized_keys</code>.
+If you gave the key a passphrase, you'll be asked for <em>that</em> (not your account password); run
+<code>ssh-add ~/.ssh/id_ed25519</code> once per session to cache it.</p>
+</blockquote>
+<hr />
+<h2 id="3-connect-vs-code-to-the-cluster">3. Connect VS Code to the cluster</h2>
+<ol>
+<li><code>F1</code> → <strong>Remote-SSH: Connect to Host…</strong> → pick <strong><code>ifb</code></strong>. No password prompt.</li>
+<li><strong>File → Open Folder…</strong> to open your working directory on the cluster.</li>
+<li>Install the <strong>Python</strong> and <strong>Jupyter</strong> extensions when VS Code offers "Install in SSH".</li>
+</ol>
+<hr />
+<h2 id="4-minimal-test-can-you-build-a-conda-environment">4. Minimal test — can you build a conda environment?</h2>
+<p>This confirms conda works for your account (independent of any project).</p>
+<p><strong>a. Enable conda once</strong> (in a cluster terminal — the VS Code terminal is fine):</p>
+<pre><code class="language-bash">/shared/software/miniconda/bin/conda init bash
+</code></pre>
+<p>Then <strong>open a new terminal</strong> (or <code>source ~/.bashrc</code>) so <code>conda</code> is available.</p>
+<p><strong>b. Create a tiny test environment and verify it:</strong></p>
+<pre><code class="language-bash">conda create -y -n envtest python=3.11 numpy
+conda activate envtest
+python -c &quot;import numpy; print('conda works — numpy', numpy.__version__)&quot;
+</code></pre>
+<p>You should see <code>conda works — numpy X.Y.Z</code>. 🎉</p>
+<p><strong>c. Clean up</strong> (optional):</p>
+<pre><code class="language-bash">conda deactivate
+conda env remove -y -n envtest
+</code></pre>
+<blockquote>
+<p><strong>Rule of thumb:</strong> the login node is for editing and light setup only. Anything heavy
+(training, large data, long jobs) must go through <strong>Slurm</strong> — e.g. grab a compute node with
+<code>srun --account=&lt;your-project-account&gt; --partition=fast --cpus-per-task=4 --mem=16G --time=02:00:00 --pty bash</code>.
+Your project's setup guide lists its Slurm account and any shared environment to use instead of
+building your own.</p>
+</blockquote>
+<hr />
+<p>That's it — VS Code connects passwordlessly, extensions are in place, and conda works. You're
+ready to open a specific project and follow its own setup notes.</p></body></html>
