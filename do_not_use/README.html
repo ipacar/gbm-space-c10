@@ -33,7 +33,14 @@ source paper up front. Reading the solutions short-circuits that.</p>
 <p>Contents:
 - <code>01_snrna_analysis_solution.ipynb</code> — Level 1 completed solution
 - <code>02_spatial_cell2location_solution.ipynb</code> — Level 2 completed solution
-- <code>03_xenium_organoid_analysis.ipynb</code> — Level 3 (Xenium) completed solution</p>
+- <code>03_xenium_organoid_analysis.ipynb</code> — Level 3 (Xenium) completed solution
+- <code>level1_summary_figure.png</code>, <code>level2_summary_figure.png</code> — the completed-analysis result
+  figures (i.e. what your own final figure should roughly look like — don't peek)</p>
+<p><strong>Exception —</strong> <code>grch38_gene_positions.parquet</code> <strong>is NOT a solution.</strong> It's a reference table of
+gene genomic coordinates that the inferCNV step (Level 1) needs as <em>input</em>. It's parked in this
+folder only so a <code>git clone</code> of the repo has it. You may load it:</p>
+<pre><code class="language-python">gene_pos = pd.read_parquet(&quot;.../do_not_use/grch38_gene_positions.parquet&quot;)
+</code></pre>
 <p>These are kept in the repository only for <strong>instructors</strong> (teaching, grading, reference). If you
 are a student and opened this by accident, close it and go back to your <code>*_student.ipynb</code>
 notebooks. 🙂</p></body></html>
